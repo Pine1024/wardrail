@@ -1,0 +1,14 @@
+agent:
+  name: hotline-worker
+  display_name: 12345热线工单助手
+  model: wd-route://gov/onboard
+  knowledge: [policies, faq, case-history]
+  tools:
+    - {ref: kb.search, risk: low}
+    - {ref: ticket.create, risk: medium, connector: hotline-oms}
+    - {ref: ticket.escalate, risk: high}     # 升级督办→HITL
+  graph:
+    - retrieve: {top_k: 6}
+    - llm: {prompt_version: v2}
+    - branch: {if: "intent=='complaint'", then: approval, else: output}
+    - output: {cite: required}

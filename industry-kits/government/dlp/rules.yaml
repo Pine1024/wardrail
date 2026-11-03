@@ -1,0 +1,4 @@
+rules:
+  - {id: idcard, type: regex, pattern: "\\d{17}[0-9Xx]", action: mask, scope: [request, store]}
+  - {id: phone, type: regex, pattern: "1\\d{10}", action: mask, scope: [store]}
+  - {id: state-secret, type: keyword, terms: ["涉密", "机密", "秘密级"], action: block, scope: [request, egress, store]}

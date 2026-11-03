@@ -1,0 +1,6 @@
+mode: hybrid   # 中心云 + 车间边缘节点
+edge:
+  node_spec: "2×16C64G + 1×GPU(L20)"
+  offline: {model_cache_gb: 200, sync_interval_min: 60}
+ot_isolation: {zone: ot-dmz, unidirectional_gateway: true}
+audit: {retention_years: 3}

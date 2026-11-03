@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r gateway/requirements.txt
+          pip install pytest
+
+      - name: Unit tests (gateway)
+        run: pytest gateway/tests -v
+
+      - name: Unit tests (orchestrator)
+        run: pytest orchestrator/tests -v
+
+      - name: Sim V1 end-to-end verification
+        run: python sim/verify_e2e.py
+
+      - name: Sim V2 fault-injection verification
+        run: python sim/verify_v2.py
+
+      - name: Evals regression gate
+        run: python evals/run_evals.py --threshold 0.85
+
+      - name: Upload verification reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-reports-${{ matrix.python-version }}
+          path: |
+            verify_report.json
+            verify_report_v2.json
+            eval_report.json
+          if-no-files-found: ignore

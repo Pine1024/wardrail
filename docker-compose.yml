@@ -1,0 +1,74 @@
+version: "3.9"
+
+# WardRail 一键开发环境（demo 档）
+# 生产部署请使用 helm/
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: wardrail
+      POSTGRES_PASSWORD: wardrail
+      POSTGRES_DB: wardrail
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports: ["5432:5432"]
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+
+  vault:
+    image: hashicorp/vault:1.15
+    cap_add: [IPC_LOCK]
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: dev-root
+    ports: ["8200:8200"]
+
+  # M5 模型网关（wd_gateway: 路由/降级/配额/DLP/审计，支持 GATEWAY_MOCK 免 key）
+  gateway:
+    build: ./gateway
+    environment:
+      GATEWAY_MOCK: "1"
+    ports: ["8002:8002"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8002/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  # M7 全链路 Trace 与评测
+  langfuse:
+    image: langfuse/langfuse:2
+    environment:
+      DATABASE_URL: postgresql://wardrail:wardrail@postgres:5432/wardrail
+      NEXTAUTH_SECRET: change-me
+      SALT: change-me
+    ports: ["3000:3000"]
+    depends_on: [postgres]
+
+  # M2 编排器
+  orchestrator:
+    build: ./orchestrator
+    environment:
+      GATEWAY_URL: http://gateway:8002
+      DATABASE_URL: postgresql://wardrail:wardrail@postgres:5432/wardrail
+      REDIS_URL: redis://redis:6379/0
+    ports: ["8000:8000"]
+    depends_on: [gateway, postgres, redis]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  # M4 工具注册中心
+  registry:
+    build: ./registry
+    ports: ["8001:8001"]
+    depends_on: [postgres]
+
+volumes:
+  pgdata:

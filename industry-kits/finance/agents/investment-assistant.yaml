@@ -1,0 +1,16 @@
+# 预置 Agent 模板: 投研助手
+agent:
+  name: investment-assistant
+  display_name: 投研助手
+  model: wd-route://finance/research   # 经网关路由(私有模型优先)
+  knowledge: [research-reports, announcements]
+  tools:
+    - {ref: kb.search, risk: low}
+    - {ref: market.quote, risk: low, connector: quote-gateway}
+    - {ref: report.export_pdf, risk: medium}
+  graph:
+    - retrieve: {top_k: 8, rerank: true}
+    - llm: {prompt_version: v3}
+    - approval: {when: "output.contains('投资建议')"}   # 输出含投资建议→人工复核
+    - output: {cite: required}
+  memory: {enabled: false}    # 金融合规: 不做跨会话记忆

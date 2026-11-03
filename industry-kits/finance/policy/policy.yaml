@@ -1,0 +1,6 @@
+policy: finance-rbac
+rules:
+  - {subject: "role:researcher", domain: finance, resource: "agent:investment-assistant", actions: [run], constraints: {data_residency: onboard}}
+  - {subject: "role:compliance", domain: finance, resource: "approval:*", actions: [approve]}
+  - {subject: "role:teller", domain: finance, resource: "tool:market.quote", actions: [call]}
+default: deny

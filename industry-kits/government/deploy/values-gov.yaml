@@ -1,0 +1,4 @@
+replicaCount: {gateway: 2, orchestrator: 2, vecdb: 2}
+audit: {retention_years: 3, worm: true}
+xinchuang: {os: [kylin-v10, uos], db: [dameng8, kingbaseES], accelerator: [ascend910B]}
+sla: "99.9%"

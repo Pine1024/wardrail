@@ -1,0 +1,5 @@
+policy: gov-rbac
+rules:
+  - {subject: "role:operator", domain: hotline, resource: "agent:hotline-worker", actions: [run], constraints: {tool_risk: "<=medium"}}
+  - {subject: "role:supervisor", domain: hotline, resource: "approval:*", actions: [approve]}
+default: deny

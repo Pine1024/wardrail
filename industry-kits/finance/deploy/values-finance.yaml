@@ -1,0 +1,9 @@
+# Helm values: 金融增强版
+replicaCount: {gateway: 3, orchestrator: 3, vecdb: 2}
+resources: {gpu: {count: 4, type: "A800/910B"}}
+audit: {retention_years: 5, worm: true, sink: [postgres, kafka, siem]}
+sla: "99.9%"
+dataResidency: onboard-only   # 数据不出域
+models:
+  private: [qwen2.5-72b, qwen2.5-14b, bge-m3, bge-reranker-v2]
+  cloud: disabled           # 默认全禁云模型

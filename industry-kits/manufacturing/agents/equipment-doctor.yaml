@@ -1,0 +1,11 @@
+agent:
+  name: equipment-doctor
+  display_name: 设备故障诊断助手
+  model: wd-route://mfg/edge        # 边缘节点路由
+  knowledge: [equipment-manuals, maintenance-logs]
+  tools:
+    - {ref: kb.search, risk: low}
+    - {ref: iot.sensor_query, risk: low, connector: iot-hub, network_zone: ot-dmz}
+    - {ref: workorder.create, risk: medium, connector: mes}
+  graph: [retrieve, llm, output]
+deploy: {mode: edge, offline_capable: true}   # 车间可离线

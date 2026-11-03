@@ -1,0 +1,7 @@
+# 金融 DLP 规则: 命中即脱敏并阻断出域
+rules:
+  - {id: bankcard, type: regex, pattern: "\\d{16,19}", action: mask, scope: [request, egress]}
+  - {id: idcard, type: regex, pattern: "\\d{17}[0-9Xx]", action: mask, scope: [request, store]}
+  - {id: customer-name, type: ner, model: person-zh, action: mask, scope: [request, egress]}
+  - {id: insider-info, type: keyword, terms: ["内幕", "未公开重大信息"], action: block, scope: [egress]}
+routing: {sensitivity: ">=internal", dest: private-model-only}

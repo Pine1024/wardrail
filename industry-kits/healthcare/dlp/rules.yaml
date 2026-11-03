@@ -1,0 +1,6 @@
+rules:
+  - {id: idcard, type: regex, pattern: "\\d{17}[0-9Xx]", action: mask, scope: [request, store, egress]}
+  - {id: medical-no, type: regex, pattern: "[A-Z]\\d{8,12}", action: mask, scope: [request]}
+  - {id: patient-name, type: ner, model: person-zh, action: mask, scope: [request, store, egress]}
+  - {id: genetic, type: keyword, terms: ["基因检测报告编号"], action: block, scope: [egress]}
+routing: {sensitivity: ">=internal", dest: private-model-only}

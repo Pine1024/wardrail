@@ -1,0 +1,13 @@
+agent:
+  name: record-auditor
+  display_name: 病历质控助手
+  model: wd-route://med/onboard
+  knowledge: [clinical-pathways, icd-coding]
+  tools:
+    - {ref: emr.read, risk: low, connector: his, scopes: ["emr:read:anonymized"]}
+    - {ref: qc.report, risk: medium}
+  graph:
+    - retrieve: {top_k: 6}
+    - llm: {prompt_version: v2}
+    - output: {cite: required}
+  dlp_strict: true    # 全链路强脱敏后才进模型
