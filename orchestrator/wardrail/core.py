@@ -119,22 +119,43 @@ class WardRail:
 
     def __init__(self, project: str, gateway_url: str = "http://localhost:4000",
                  registry_url: str = "http://localhost:8001",
-                 llm: LLMClient | None = None):
+                 llm: LLMClient | None = None,
+                 sandbox_runner: Any | None = None):
+        """sandbox_runner: 可选 SandboxRunner (sandbox/wd_sandbox.py).
+        仅当工具声明 sandbox=True 且带 sandbox_command 时才会用到, 缺省不改变现有行为.
+        注意: SandboxRunner 为容器档进程级隔离, 不是 OS 级硬沙箱.
+        """
         self.project = project
         self.gateway_url = gateway_url
         self.registry_url = registry_url
         self.llm: LLMClient = llm or OpenAICompatClient()
+        self.sandbox_runner = sandbox_runner
         self._tools: dict[str, dict[str, Any]] = {}
         self._agents: dict[str, dict[str, Any]] = {}
         self._approvals: dict[str, Callable[[str, dict], bool]] = {}
         self._handles: dict[str, AgentHandle] = {}
 
-    def tool(self, risk: str = "low", scopes: list[str] | None = None) -> Callable:
-        """装饰器: 声明工具及其风险等级."""
+    def tool(self, risk: str = "low", scopes: list[str] | None = None,
+             sandbox: bool = False) -> Callable:
+        """装饰器: 声明工具及其风险等级.
+
+        sandbox=True 时, 若 WardRail 实例配置了 sandbox_runner 且工具函数
+        带 `sandbox_command` 属性(list[str]), 将改由 SandboxRunner 以进程级
+        沙箱执行该命令(容器档, 非硬沙箱); 其余情况保持原行为, API 完全兼容.
+        """
         def wrap(fn: Callable):
-            self._tools[fn.__name__] = {"fn": fn, "risk": risk, "scopes": scopes or []}
+            self._tools[fn.__name__] = {"fn": fn, "risk": risk,
+                                        "scopes": scopes or [], "sandbox": sandbox}
             return fn
         return wrap
+
+    @staticmethod
+    def sandboxed(command: list[str]) -> Callable:
+        """标记一个函数由沙箱命令实现: fn.sandbox_command = command."""
+        def deco(fn: Callable):
+            fn.sandbox_command = command  # type: ignore[attr-defined]
+            return fn
+        return deco
 
     def agent(self, name: str, model: str, tools: list[Callable],
               fallback_models: list[str] | None = None) -> AgentHandle:
@@ -163,7 +184,14 @@ class WardRail:
         run.record("tool_exec", {"tool": tool_name, "risk": t["risk"], "input": tool_input})
         t0 = time.perf_counter()
         try:
-            output = t["fn"](**tool_input)
+            cmd = getattr(t["fn"], "sandbox_command", None)
+            if t.get("sandbox") and self.sandbox_runner and cmd:
+                # 沙箱执行: 命令级容器档隔离(进程级, 非硬沙箱), stdout 为 JSON 快照
+                res = self.sandbox_runner.run(cmd)
+                output = {"exit_code": res.exit_code, "timed_out": res.timed_out,
+                          "stdout": res.stdout[-2000:], "stderr": res.stderr[-2000:]}
+            else:
+                output = t["fn"](**tool_input)
         except Exception as e:  # noqa: BLE001 — 工具异常记入审计并终止
             run.record("tool_error", {"tool": tool_name, "error": str(e)},
                        (time.perf_counter() - t0) * 1000)

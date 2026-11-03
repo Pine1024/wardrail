@@ -1,4 +1,4 @@
-# WardRail — Agent Governance Layer
+# WardRail
 
 **A lightweight, embeddable governance layer for AI agents — approval, audit, DLP, evaluation. Ship in two days.**
 
@@ -52,7 +52,7 @@ WardRail **不是**又一个 Dify/LangChain——那些是让 Agent 跑起来的
 | `sim/` | 端到端模拟验证框架：V1 全链路（DLP→门禁→注册→编排 HITL→网关→评测）+ V2 异常注入（超时重试、流式跨分片脱敏、工具熔断、审批超时、快照回放），产出 verify_report*.json，FAIL 退出码非 0 | ✅ v0.1 |
 | `evals/` | 评测回归脚本（`--threshold` 阈值门禁，可集成 CI） | ✅ v0.1 |
 | `orchestrator/console.py` | 极简 Web 控制台：查看 Run、审批挂起工单 | ✅ v0.1 |
-| `sandbox/` | 容器档进程级隔离（**非** OS 级硬沙箱），高危工具执行 + 超时熔断 | 🚧 下个迭代 |
+| `sandbox/` | 容器档进程级隔离（**非** OS 级硬沙箱），高危工具执行 + 超时熔断 + 环境变量白名单 | ✅ v0.1 |
 | `knowledge/` | RAG：ACL 权限过滤检索、引用溯源 | 🚧 v0.3 |
 | `apps/web` | 完整控制台 | 📋 规划 |
 | ~~OS 级硬沙箱 / 应用层客户端~~ | 刻意不做，见上文"我们明确不做什么" | ❌ |

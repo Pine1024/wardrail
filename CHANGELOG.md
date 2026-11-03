@@ -6,6 +6,22 @@
 
 ---
 
+## 2026-11-03 任务#3 — 工具执行约束（容器档，非硬沙箱）
+
+> 补执行 11-03 定时迭代，原自动化执行异常，本次由人工补做。
+
+**完成**
+- 新增 `sandbox/wd_sandbox.py`：`SandboxRunner.run(command, workdir, timeout, network) -> ExecResult`（stdout/stderr/exit_code/timed_out）
+  - `SANDBOX_MODE=local`（默认）：subprocess + resource 资源限制（RLIMIT_AS/NPROC/FSIZE/CORE）+ 环境变量白名单（未列入白名单的变量对子进程不可见）
+  - `SANDBOX_MODE=docker`：`docker run --rm --network=none --read-only --cap-drop=ALL --memory=512m --pids-limit=100 --tmpfs /tmp`，出网默认禁止
+  - 超时强杀并标记 `timed_out=True`；docstring 与文档明确声明：**local/docker 档均为进程级隔离，不是内核级硬沙箱；需要强隔离请使用 Firecracker 等方案**
+- `orchestrator/wardrail/core.py`：工具装饰器新增可选 `sandbox=True` 参数 + `WardRail.sandboxed(command)` 标记 + 实例可选 `sandbox_runner` 配置；声明沙箱的工具改由 SandboxRunner 执行，未配置时行为完全不变（API 向后兼容）
+- 测试：`sandbox/tests/test_sandbox.py`（8 用例：正常执行/stdout 捕获/非零退出码/超时杀掉/环境变量白名单/docker 参数 mock/docker 放网/非法模式）+ `orchestrator/tests/test_sandbox_integration.py`（2 用例：沙箱路径走通、无 runner 保持旧行为）
+- 文档：ROADMAP 勾选该项，README 能力表 sandbox 行改 ✅
+
+**测试**：42 单测全绿；sim verify_e2e / verify_v2 均 PASS。
+**遗留**：出网白名单目前仅 docker 档可强制（--network=none），local 档由策略层约束； WardRail-Policy（下一项）接入后统一门禁。
+
 ## 2026-11-02 任务#2 — 鉴权层：API Key 管理 + JWT 登录
 
 **完成**
