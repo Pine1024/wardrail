@@ -1,4 +1,4 @@
-# WardRail
+# WardRail — Agent Governance Layer
 
 **A lightweight, embeddable governance layer for AI agents — approval, audit, DLP, evaluation. Ship in two days.**
 
