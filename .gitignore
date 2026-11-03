@@ -3,3 +3,6 @@ __pycache__/
 .env
 node_modules/
 eval_report.json
+
+# sim 验证报告(运行产物)
+verify_report*.json
