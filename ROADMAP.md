@@ -44,7 +44,7 @@
 - [x] README / FAQ / RELEASE_NOTES / CI
 - [x] 鉴权层：API Key 管理 + JWT 登录，控制台加登录页（14 单测）
 - [x] **工具执行约束（容器档，非硬沙箱）**：subprocess → 容器执行 + 超时熔断 + 出网白名单；文档明确标注"进程级隔离"（2026-11-03 补执行：SANDBOX_MODE=local/docker 双模式 + 环境变量白名单 + resource/docker 安全参数，8+2 单测）
-- [ ] **策略引擎 WardRail-Policy**：YAML DSL 解析 + 决策缓存 + 接入工具门禁（借鉴行业套件 policy.yaml 结构）
+- [x] **策略引擎 WardRail-Policy**：YAML DSL 解析 + 决策缓存 + 接入工具门禁（借鉴行业套件 policy.yaml 结构）（2026-11-03：orchestrator/wardrail/policy.py，零依赖 DSL + TTL 缓存 + agent/工具两级门禁 + 策略主体贯穿全链路，11 单测）
 
 ### P1 · v0.3 可签单能力（对应"能卖给第一个客户"的最小集）
 

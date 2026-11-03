@@ -85,6 +85,8 @@ class Run:
     steps: list[dict[str, Any]] = None  # type: ignore[assignment]
     answer: str | None = None
     pending_action: dict[str, Any] | None = None  # 待审批动作 {"tool", "input", "risk"}
+    policy_subject: str | None = None  # 策略主体 (agent 级与工具级门禁共用)
+    policy_domain: str | None = None
 
     def __post_init__(self) -> None:
         self.run_id = self.run_id or uuid.uuid4().hex
@@ -104,14 +106,18 @@ class Run:
                 "agent_name": self.agent_name, "user_id": self.user_id,
                 "input": self.input, "status": self.status.value,
                 "steps": self.steps, "answer": self.answer,
-                "pending_action": self.pending_action}
+                "pending_action": self.pending_action,
+                "policy_subject": self.policy_subject,
+                "policy_domain": self.policy_domain}
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> Run:
         return cls(agent_name=d["agent_name"], user_id=d["user_id"], input=d["input"],
                    run_id=d["run_id"], trace_id=d["trace_id"],
                    status=RunStatus(d["status"]), steps=list(d["steps"]),
-                   answer=d.get("answer"), pending_action=d.get("pending_action"))
+                   answer=d.get("answer"), pending_action=d.get("pending_action"),
+                   policy_subject=d.get("policy_subject"),
+                   policy_domain=d.get("policy_domain"))
 
 
 class WardRail:
@@ -120,16 +126,20 @@ class WardRail:
     def __init__(self, project: str, gateway_url: str = "http://localhost:4000",
                  registry_url: str = "http://localhost:8001",
                  llm: LLMClient | None = None,
-                 sandbox_runner: Any | None = None):
+                 sandbox_runner: Any | None = None,
+                 policy: Any | None = None):
         """sandbox_runner: 可选 SandboxRunner (sandbox/wd_sandbox.py).
         仅当工具声明 sandbox=True 且带 sandbox_command 时才会用到, 缺省不改变现有行为.
         注意: SandboxRunner 为容器档进程级隔离, 不是 OS 级硬沙箱.
+        policy: 可选 PolicyEngine (wardrail/policy.py). 配置后 agent.run 与工具调用
+        前置策略检查, deny 即 REJECTED 并入审计; 缺省不改变现有行为.
         """
         self.project = project
         self.gateway_url = gateway_url
         self.registry_url = registry_url
         self.llm: LLMClient = llm or OpenAICompatClient()
         self.sandbox_runner = sandbox_runner
+        self.policy = policy
         self._tools: dict[str, dict[str, Any]] = {}
         self._agents: dict[str, dict[str, Any]] = {}
         self._approvals: dict[str, Callable[[str, dict], bool]] = {}
@@ -223,7 +233,18 @@ class WardRail:
             return {}
 
     def _gate(self, run: Run, tool_name: str, tool_input: dict[str, Any]) -> str:
-        """风险门禁: 返回 pass / waiting / rejected. 通过后执行工具."""
+        """门禁: 先策略(PolicyEngine, 配置了才启用)后风险. 返回 pass / waiting / rejected."""
+        if self.policy is not None:
+            subj = run.policy_subject or f"user:{run.user_id}"
+            dom = run.policy_domain or self.project
+            d = self.policy.check(subject=subj, domain=dom,
+                                  resource=f"tool:{tool_name}", action="call")
+            run.record("policy_gate", {"tool": tool_name, "allowed": d.allowed,
+                                       "rule": d.rule, "cached": d.cached})
+            if not d.allowed:
+                run.status = RunStatus.REJECTED
+                run.answer = f"策略拒绝调用工具 {tool_name} (规则: {d.rule})"
+                return "rejected"
         risk = self._tools[tool_name]["risk"]
         run.record("tool_gate", {"tool": tool_name, "risk": risk})
         if risk not in HIGH_RISKS:
@@ -274,6 +295,9 @@ class WardRail:
             gate = self._gate(run, tool_name, tool_input)
             if gate == "waiting":
                 break  # 挂起, 等 approve() 恢复
+            if gate == "rejected":
+                run.record("done", {"status": run.status.value})
+                break  # 策略拒绝, REJECTED 终止
             out = self._execute_tool(run, tool_name, tool_input)
             if out is None and run.status is not RunStatus.RUNNING:
                 break  # 工具失败
@@ -300,11 +324,30 @@ class AgentHandle:
     def __init__(self, af: WardRail, name: str):
         self._af, self.name = af, name
 
-    def run(self, user_input: str, user_id: str = "anonymous") -> Run:
-        """启动一次受管 ReAct 运行; 遇高危工具可能挂起为 WAITING_APPROVAL."""
-        run = Run(agent_name=self.name, user_id=user_id, input=user_input)
-        run.status = RunStatus.RUNNING
+    def run(self, user_input: str, user_id: str = "anonymous", *,
+            subject: str | None = None, domain: str | None = None) -> Run:
+        """启动一次受管 ReAct 运行; 遇高危工具可能挂起为 WAITING_APPROVAL.
+
+        配置了 policy 时先做 agent 级策略检查 (resource=agent:<name>, action=run):
+        deny 返回 REJECTED 的 Run (审计完整), 不产生任何 LLM/工具调用.
+        subject/domain 可选: 缺省 subject=user:<user_id>, domain=项目名.
+        """
+        run = Run(agent_name=self.name, user_id=user_id, input=user_input,
+                  policy_subject=subject or f"user:{user_id}",
+                  policy_domain=domain or self._af.project)
         run.record("start", {"agent": self.name, "model": self._af._agents[self.name]["model"]})
+        if self._af.policy is not None:
+            d = self._af.policy.check(subject=run.policy_subject,
+                                      domain=run.policy_domain,
+                                      resource=f"agent:{self.name}", action="run")
+            run.record("policy_gate", {"agent": self.name, "allowed": d.allowed,
+                                       "rule": d.rule, "cached": d.cached})
+            if not d.allowed:
+                run.status = RunStatus.REJECTED
+                run.answer = f"策略拒绝运行 Agent {self.name} (规则: {d.rule})"
+                run.record("done", {"status": run.status.value})
+                return run
+        run.status = RunStatus.RUNNING
         return self._af._resume(run, self.name)
 
     def approve(self, run: Run, decision: bool, modified_input: dict[str, Any] | None = None) -> Run:

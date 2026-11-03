@@ -48,7 +48,7 @@ WardRail **不是**又一个 Dify/LangChain——那些是让 Agent 跑起来的
 | `gateway/` | OpenAI 兼容模型网关：多模型路由、按 priority 降级链、RPM/TPM 配额（滑动窗口）、DLP 出站脱敏 + 回填、审计日志、SSE 流式、mock 上游 | ✅ v0.1 |
 | `orchestrator/` | ReAct 编排内核（结构化 JSON 决策）、Run 审计单元（每步出入参快照 + latency）、checkpoint 序列化/恢复、HITL（WAITING_APPROVAL → approve()/reject 恢复）、LLM 抽象（MockLLM / OpenAICompatClient，失败重试） | ✅ v0.1 |
 | `registry/` | MCP 工具注册中心 + 风险分级（low/medium/high/critical）+ scope 授权校验（403 拒绝）+ critical 强制 HITL/沙箱 | ✅ v0.1 |
-| `policy/` | 策略即代码：Casbin 模型，谁能用哪个 Agent/工具/模型 | ✅ v0.1 |
+| `orchestrator/wardrail/policy.py` | 策略即代码：内置 PolicyEngine（YAML DSL、TTL 决策缓存、agent/工具两级门禁、首条命中生效、default deny）；复杂 RBAC 场景可外接 Casbin（policy/examples/rbac.conf） | ✅ v0.1 |
 | `sim/` | 端到端模拟验证框架：V1 全链路（DLP→门禁→注册→编排 HITL→网关→评测）+ V2 异常注入（超时重试、流式跨分片脱敏、工具熔断、审批超时、快照回放），产出 verify_report*.json，FAIL 退出码非 0 | ✅ v0.1 |
 | `evals/` | 评测回归脚本（`--threshold` 阈值门禁，可集成 CI） | ✅ v0.1 |
 | `orchestrator/console.py` | 极简 Web 控制台：查看 Run、审批挂起工单 | ✅ v0.1 |

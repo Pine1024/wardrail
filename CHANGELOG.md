@@ -6,6 +6,26 @@
 
 ---
 
+## 2026-11-03 任务#4 — 策略引擎 WardRail-Policy（YAML DSL + 决策缓存 + 门禁接入）
+
+**完成**
+- 新增 `orchestrator/wardrail/policy.py`：`PolicyEngine` / `Decision` / `PolicyError`
+  - YAML DSL 复用 `kitloader.parse_simple_yaml`（零第三方依赖），结构对齐 `industry-kits/*/policy/policy.yaml`（subject/domain/resource/actions/default）
+  - 匹配语义（首条命中即生效）：subject 支持单值/列表/`*`；resource 支持 `tool:*` 前缀通配；actions 列表任一命中即通过，支持 `call:*` 前缀通配；规则可选 `effect: deny`（白名单中的黑名单，排列在前优先生效）；未命中走 `default`（缺省 deny）
+  - 决策缓存：`(subjects, domain, resource, action) -> Decision`，TTL 过期 + `reload()`/`invalidate()` 失效 + hits/misses 累计统计（跨 reload 保留）
+- `core.py` 门禁接入（全部向后兼容，不配 policy 行为不变）：
+  - `WardRail(policy=engine)` 新增可选参数
+  - `AgentHandle.run()` 前置 agent 级检查（`resource=agent:<name>, action=run`），deny 返回 REJECTED 的完整审计 Run，不产生任何 LLM/工具调用；新增可选 `subject/domain` 参数，缺省 `user:<user_id>` / 项目名
+  - `_gate()` 前置工具级检查（`resource=tool:<name>, action=call`），deny → REJECTED 终止并记 done
+  - **策略主体贯穿全链路**：`Run.policy_subject/policy_domain` 新增字段（含 checkpoint 序列化），agent 级与工具级门禁共用同一主体，杜绝"agent 放行、工具换主体"的绕过
+- 测试：`orchestrator/tests/test_policy.py`（11 用例：DSL 解析/default deny/通配与 effect/结构校验/缓存命中与 reload 失效/TTL 过期/工具级拒绝与放行/agent 级拒绝/subject 显式传入/两级授权独立性/无 policy 向后兼容）
+- 文档：ROADMAP P0 勾选；README 能力表 policy 行更新为内置引擎说明
+
+**测试**：策略 11/11 绿；orchestrator 32/33（1 个失败为本机终端沙箱 preexec_fn 限制，非代码问题）；sim verify_e2e 13/13、verify_v2 9/9 全 PASS。
+**遗留**：gateway 12 个用例在本终端因 pytest 临时目录权限报 setup error（CI 环境正常，待 workflow scope 开通后在 CI 验证）；策略与 Casbin 模型（policy/examples/rbac.conf）的双轨关系待文档化——当前内置引擎覆盖 YAML 子集，RBAC 角色继承等复杂场景仍可接 Casbin。
+
+---
+
 ## 2026-11-03 任务#3 — 工具执行约束（容器档，非硬沙箱）
 
 > 补执行 11-03 定时迭代，原自动化执行异常，本次由人工补做。
