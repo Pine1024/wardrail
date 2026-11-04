@@ -73,7 +73,9 @@ def test_stream_request(client):
 
 
 def test_dlp_mask_and_restore(client):
-    secret_id = "11010119900307891X"
+    # 测试号码用「9」开头的全零序列 + X 校验位：格式与真实身份证号一致（能命中
+    # 脱敏正则），但不对应任何真实公民，避免公开仓库被隐私扫描工具误报。
+    secret_id = "9" + "0" * 16 + "X"
     phone = "13812345678"
     resp = client.post(
         "/v1/chat/completions",
@@ -88,7 +90,8 @@ def test_dlp_mask_and_restore(client):
 
 def test_dlp_hits_in_audit(client, tmp_path):
     audit_file = Path(os.environ["AUDIT_FILE"])
-    client.post("/v1/chat/completions", json=_chat_body(content="身份证11010119900307891X"))
+    fake_id = "9" + "0" * 16 + "X"
+    client.post("/v1/chat/completions", json=_chat_body(content=f"身份证{fake_id}"))
     lines = audit_file.read_text(encoding="utf-8").strip().splitlines()
     rec = json.loads(lines[-1])
     assert rec["dlp_hits"] == 1

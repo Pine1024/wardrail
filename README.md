@@ -3,7 +3,7 @@
 **A lightweight, embeddable governance layer for AI agents — approval, audit, DLP, evaluation. Ship in two days.**
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![CI](https://github.com/<you>/wardrail/actions/workflows/ci.yml/badge.svg)]()
+[![CI](https://github.com/Pine1024/wardrail/actions/workflows/ci.yml/badge.svg)](https://github.com/Pine1024/wardrail/actions/workflows/ci.yml)
 [![Status](https://img.shields.io/badge/status-v0.1--alpha-orange)]()
 
 ## 我们不做另一个 Agent 平台，我们做它的刹车和行车记录仪

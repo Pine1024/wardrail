@@ -93,12 +93,16 @@ check("inject.gateway_retry",
       f"status={run1.status.value}, retries={[(s['attempt'], s['outcome']) for s in retries]}")
 
 # ============================================================
-# A2. DLP 流式跨分片缓冲: 身份证 "110101199003078515" 切成两半。
+# A2. DLP 流式跨分片缓冲: 一个 18 位号码被切成两半。
 # 行为契约(网关脱敏器): 流式分片不能导致敏感号漏出,
 # 尾部可能构成号码前缀的数字必须扣留至下个分片合并后再判定。
+# 测试号码用「9」开头的全零序列: 长度与真实证件号一致(仍能命中脱敏正则),
+# 但不对应任何真实公民, 避免公开仓库被隐私扫描工具误报。
 # ============================================================
 import re
 ID_PAT = re.compile(r"\d{15,18}[0-9Xx]|\d{15,19}")  # 18+X 位在前, 避免纯数字漏尾
+FAKE_ID = "9" + "0" * 17          # 18 位
+FAKE_CARD = "9" + "0" * 18        # 19 位
 
 class StreamDLPBuffer:
     """跨分片缓冲脱敏: 输出前保留最长 18 位纯数字尾部, 等待合并判定。"""
@@ -126,13 +130,14 @@ def feed_all(sdlp: StreamDLPBuffer, chunks: list[str]) -> str:
     return "".join(sdlp.feed(c) for c in chunks) + sdlp.flush()
 
 sdlp = StreamDLPBuffer()
-streamed = feed_all(sdlp, ["客户号110101199003078", "515, 收悉"])
+# 前 15 位一片、后 3 位一片：前半片是「可能构成号码前缀」的情形，必须扣留到合并后判定
+streamed = feed_all(sdlp, ["客户号" + FAKE_ID[:15], FAKE_ID[15:] + ", 收悉"])
 check("dlp.stream_split_masked",
-      "110101199003078515" not in streamed and "110101199003078" not in streamed
-      and "515" not in streamed and streamed == "客户号[MASKED], 收悉",
+      FAKE_ID not in streamed and FAKE_ID[:15] not in streamed
+      and FAKE_ID[15:] not in streamed and streamed == "客户号[MASKED], 收悉",
       streamed[:50])
 check("dlp.stream_whole_masked",
-      feed_all(StreamDLPBuffer(), ["卡号6222020200112233445"]) == "卡号[MASKED]")
+      feed_all(StreamDLPBuffer(), ["卡号" + FAKE_CARD]) == "卡号[MASKED]")
 
 # ============================================================
 # A3. 工具失败熔断器: 连续失败 3 次 -> OPEN 短路第 4 次 -> 半开恢复

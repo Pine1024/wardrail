@@ -32,12 +32,17 @@ allow = rc.post("/tools/market_quote/authorize", params={"agent_id": "ag1"}, jso
 check("registry.scope通过(HTTP200)", allow.status_code == 200 and allow.json()["allowed"] is True)
 
 # ---------- 2. DLP 脱敏 ----------
+# 测试数据用「9」开头的全零号码：长度与真实证件号一致（18 位身份证 / 19 位卡号），
+# 仍能命中脱敏正则以验证逻辑有效；但「9」不是任何真实身份证的省份前缀位，
+# 且全零主体不对应真实公民，避免公开仓库被密钥/隐私扫描工具误报。
+FAKE_ID = "9" + "0" * 17
+FAKE_CARD = "9" + "0" * 18
 import re
 def dlp(text: str):
     pat = r"\d{17}[0-9Xx]|\d{16,19}"
     return re.sub(pat, "[MASKED]", text), text != re.sub(pat, "[MASKED]", text)
-out, masked = dlp("客户张三身份证110101199003078515, 卡号6222020200112233445")
-check("dlp.mask", masked and "110101199003078515" not in out and "6222020200112233445" not in out, out[:40])
+out, masked = dlp(f"客户张三身份证{FAKE_ID}, 卡号{FAKE_CARD}")
+check("dlp.mask", masked and FAKE_ID not in out and FAKE_CARD not in out, out[:40])
 
 # ---------- 3. 编排内核: HITL 拒绝 / 批准 ----------
 # 适配 M3 新版 core: high/critical 现挂起为 WAITING_APPROVAL,

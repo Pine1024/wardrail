@@ -84,12 +84,37 @@ class SandboxRunner:
 
     # ---- local ----
     def _preexec(self) -> None:  # pragma: no cover - 子进程内执行
-        """子进程预执行钩子：resource 资源限制（CPU/内存/进程数/文件大小）。"""
+        """子进程预执行钩子：resource 资源限制（CPU/内存/进程数/文件大小）。
+
+        注意：部分宿主环境（受限容器、CI runner）的 hard limit 本身低于我们要设的
+        软限值，setrlimit 会抛 ValueError("current limit exceeds maximum limit")，
+        进而让整个沙箱执行失败。此处对每项限制做降级处理：能设就设，设不了就
+        沿用宿主的既有上限，不让单个限制项的失败拖垮整条执行链路。
+        """
         mb = self._memory_limit_mb
-        resource.setrlimit(resource.RLIMIT_AS, (mb * 1024 * 1024,) * 2)
-        resource.setrlimit(resource.RLIMIT_NPROC, (self._pids_limit,) * 2)
-        resource.setrlimit(resource.RLIMIT_FSIZE, (64 * 1024 * 1024,) * 2)
-        resource.setrlimit(resource.RLIMIT_CORE, (0, 0))  # 禁 core dump
+        self._set_limit(resource.RLIMIT_AS, mb * 1024 * 1024)
+        self._set_limit(resource.RLIMIT_NPROC, self._pids_limit)
+        self._set_limit(resource.RLIMIT_FSIZE, 64 * 1024 * 1024)
+        self._set_limit(resource.RLIMIT_CORE, 0)
+
+    @staticmethod
+    def _set_limit(which: int, target: int) -> None:
+        """设置资源限制软限值，失败时静默降级为宿主既有上限。
+
+        目标值高于宿主 hard limit 时改为取 hard limit（只收紧不放宽）；
+        宿主明确禁止修改时保持原状，不抛异常。
+        """
+        try:
+            _soft, hard = resource.getrlimit(which)
+        except (ValueError, OSError):
+            return
+        if hard != resource.RLIM_INFINITY and target > hard:
+            target = hard
+        try:
+            resource.setrlimit(which, (target, hard))
+        except (ValueError, OSError):
+            # 宿主不支持或拒绝修改该限制：沿用现状，不阻断执行
+            pass
 
     def run(self, command: list[str], workdir: str | None = None,
             timeout: int = 900, network: bool = False) -> ExecResult:
